@@ -6,14 +6,14 @@ import { SourceTextModule, SyntheticModule, createContext } from 'vm';
 
 let cacheMap = new WeakMap();
 
-async function builtinLinker(moduleId, { context }) {
+async function builtinLinker(specifier, { context }) {
   let cache = cacheMap.get(context);
-  let module = cache.get(moduleId);
+  let module = cache.get(specifier);
 
   if (typeof module !== 'undefined')
     return module;
 
-  let object = await import(moduleId);
+  let object = await import(specifier);
   let keys = Object.keys(object);
 
   let evaluateCallback = function () {
@@ -22,14 +22,14 @@ async function builtinLinker(moduleId, { context }) {
   };
 
   module = new SyntheticModule(keys, evaluateCallback,
-                               { identifier: moduleId, context });
-  cache.set(moduleId, module);
+                               { identifier: specifier, context });
+  cache.set(specifier, module);
 
   return module;
 }
 
-async function fileLinker(moduleId, { identifier, context }) {
-  let path = resolvePath(dirname(fileURLToPath(identifier)), moduleId);
+async function fileLinker(specifier, { identifier, context }) {
+  let path = resolvePath(dirname(fileURLToPath(identifier)), specifier);
   let url = pathToFileURL(path).toString();
 
   let cache = cacheMap.get(context);
@@ -53,24 +53,23 @@ async function fileLinker(moduleId, { identifier, context }) {
   return module;
 }
 
-async function linker(moduleId, { identifier, context }) {
-  if (builtinModules.includes(moduleId))
-    return builtinLinker(moduleId, { identifier, context });
+async function linker(specifier, { identifier, context }) {
+  if (builtinModules.includes(specifier))
+    return builtinLinker(specifier, { identifier, context });
 
-  return fileLinker(moduleId, { identifier, context });
+  return fileLinker(specifier, { identifier, context });
 }
 
-export async function createWorld(moduleId, { globals = {} } = {}) {
+export async function createWorld(path, { globals = {} } = {}) {
   globals.global = globals;
 
-  let path = resolvePath(moduleId);
   let url = pathToFileURL(path).toString();
 
   let context = createContext(globals);
 
   cacheMap.set(context, new Map());
 
-  let module = await fileLinker(moduleId, { identifier: url, context });
+  let module = await fileLinker(path, { identifier: url, context });
 
   await module.link(linker);
   await module.evaluate();
