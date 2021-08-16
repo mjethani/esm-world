@@ -1,7 +1,7 @@
 import { readFile } from 'fs/promises';
 import { builtinModules } from 'module';
 import { dirname, resolve as resolvePath } from 'path';
-import { pathToFileURL } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { SourceTextModule, SyntheticModule, createContext } from 'vm';
 
 let cacheMap = new WeakMap();
@@ -29,10 +29,11 @@ async function builtinLinker(moduleId, { context }) {
 }
 
 async function fileLinker(moduleId, { identifier, context }) {
-  let path = resolvePath(dirname(identifier), moduleId);
+  let path = resolvePath(dirname(fileURLToPath(identifier)), moduleId);
+  let url = pathToFileURL(path).toString();
 
   let cache = cacheMap.get(context);
-  let module = cache.get(path);
+  let module = cache.get(url);
 
   if (typeof module !== 'undefined')
     return module;
@@ -40,14 +41,14 @@ async function fileLinker(moduleId, { identifier, context }) {
   let source = await readFile(path, 'utf8');
 
   let initializeImportMeta = (meta, { identifier }) => {
-    meta.url = pathToFileURL(identifier).toString();
+    meta.url = identifier;
   };
 
   module = new SourceTextModule(source,
-                                { identifier: path,
+                                { identifier: url,
                                   context,
                                   initializeImportMeta });
-  cache.set(path, module);
+  cache.set(url, module);
 
   return module;
 }
@@ -62,12 +63,14 @@ async function linker(moduleId, { identifier, context }) {
 export async function createWorld(moduleId, { globals = {} } = {}) {
   globals.global = globals;
 
-  let identifier = '';
+  let path = resolvePath(moduleId);
+  let url = pathToFileURL(path).toString();
+
   let context = createContext(globals);
 
   cacheMap.set(context, new Map());
 
-  let module = await fileLinker(moduleId, { identifier, context });
+  let module = await fileLinker(moduleId, { identifier: url, context });
 
   await module.link(linker);
   await module.evaluate();
