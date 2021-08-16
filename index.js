@@ -40,7 +40,7 @@ async function fileLinker(moduleId, { identifier, context }) {
   let source = await readFile(path, 'utf8');
 
   let initializeImportMeta = (meta, { identifier }) => {
-    meta.url = pathToFileURL(identifier);
+    meta.url = pathToFileURL(identifier).toString();
   };
 
   module = new SourceTextModule(source,
