@@ -61,7 +61,8 @@ async function linker(specifier, { identifier, context }) {
 }
 
 export async function createWorld(path, { globals = {} } = {}) {
-  globals.global = globals;
+  if (!('global' in globals))
+    globals.global = globals;
 
   let url = pathToFileURL(path).toString();
 
