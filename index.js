@@ -58,7 +58,7 @@ export async function createWorld(moduleId, { globals = {} } = {}) {
 
   cacheMap.set(context, new Map());
 
-  let module = await linker(moduleId, { identifier, context });
+  let module = await fileLinker(moduleId, { identifier, context });
 
   await module.link(linker);
   await module.evaluate();
