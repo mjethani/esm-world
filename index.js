@@ -4,6 +4,8 @@ import { dirname, resolve as resolvePath } from 'path';
 import { pathToFileURL } from 'url';
 import { SourceTextModule, SyntheticModule, createContext } from 'vm';
 
+let cacheMap = new WeakMap();
+
 async function builtinLinker(moduleId, { context }) {
   let object = await import(moduleId);
   let keys = Object.keys(object);
@@ -19,18 +21,24 @@ async function builtinLinker(moduleId, { context }) {
 
 async function fileLinker(moduleId, { identifier, context }) {
   let path = resolvePath(dirname(identifier), moduleId);
+
+  let cache = cacheMap.get(context);
+  let module = cache.get(path);
+
+  if (typeof module !== 'undefined')
+    return module;
+
   let source = await readFile(path, 'utf8');
 
   let initializeImportMeta = (meta, { identifier }) => {
     meta.url = pathToFileURL(identifier);
   };
 
-  let module = new SourceTextModule(source,
-                                    { identifier: path,
-                                      context,
-                                      initializeImportMeta });
-  await module.link(linker);
-  await module.evaluate();
+  module = new SourceTextModule(source,
+                                { identifier: path,
+                                  context,
+                                  initializeImportMeta });
+  cache.set(path, module);
 
   return module;
 }
@@ -48,6 +56,12 @@ export async function createWorld(moduleId, { globals = {} } = {}) {
   let identifier = '';
   let context = createContext(globals);
 
+  cacheMap.set(context, new Map());
+
   let module = await linker(moduleId, { identifier, context });
+
+  await module.link(linker);
+  await module.evaluate();
+
   return module.namespace;
 }
