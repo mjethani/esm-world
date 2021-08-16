@@ -7,6 +7,12 @@ import { SourceTextModule, SyntheticModule, createContext } from 'vm';
 let cacheMap = new WeakMap();
 
 async function builtinLinker(moduleId, { context }) {
+  let cache = cacheMap.get(context);
+  let module = cache.get(moduleId);
+
+  if (typeof module !== 'undefined')
+    return module;
+
   let object = await import(moduleId);
   let keys = Object.keys(object);
 
@@ -15,8 +21,11 @@ async function builtinLinker(moduleId, { context }) {
       this.setExport(key, object[key]);
   };
 
-  return new SyntheticModule(keys, evaluateCallback,
-                             { identifier: moduleId, context });
+  module = new SyntheticModule(keys, evaluateCallback,
+                               { identifier: moduleId, context });
+  cache.set(moduleId, module);
+
+  return module;
 }
 
 async function fileLinker(moduleId, { identifier, context }) {
