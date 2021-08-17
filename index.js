@@ -29,6 +29,17 @@ async function builtinLinker(specifier, { context }) {
 }
 
 async function fileLinker(specifier, { identifier, context }) {
+  let error = null;
+
+  try {
+    if (new URL(specifier).protocol !== 'file:')
+      error = new Error('Only file URLs are supported');
+  } catch (error) {
+  }
+
+  if (error !== null)
+    throw error;
+
   let path = resolvePath(dirname(fileURLToPath(identifier)), specifier);
   let url = pathToFileURL(path).toString();
 
