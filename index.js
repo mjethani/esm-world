@@ -1,12 +1,11 @@
 import { readFile } from 'fs/promises';
-import { builtinModules } from 'module';
 import { dirname, resolve as resolvePath } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { SourceTextModule, SyntheticModule, createContext } from 'vm';
 
 let cacheMap = new WeakMap();
 
-async function builtinLinker(specifier, { context }) {
+async function packageLinker(specifier, { context }) {
   let cache = cacheMap.get(context);
   let module = cache.get(specifier);
 
@@ -29,9 +28,6 @@ async function builtinLinker(specifier, { context }) {
 }
 
 async function fileLinker(specifier, { identifier, context }) {
-  if (!specifier.startsWith('./') && !specifier.startsWith('../'))
-    throw new Error('Only relative paths are supported');
-
   let path = resolvePath(dirname(fileURLToPath(identifier)), specifier);
   let url = pathToFileURL(path).toString();
 
@@ -57,8 +53,8 @@ async function fileLinker(specifier, { identifier, context }) {
 }
 
 async function linker(specifier, { identifier, context }) {
-  if (builtinModules.includes(specifier))
-    return builtinLinker(specifier, { identifier, context });
+  if (!specifier.startsWith('./') && !specifier.startsWith('../'))
+    return packageLinker(specifier, { identifier, context });
 
   return fileLinker(specifier, { identifier, context });
 }
