@@ -26,14 +26,22 @@ export class MySingleton {
 ```js
 /* test.js */
 
+import { strict as assert } from 'assert';
+
 import { createWorld } from 'esm-world';
+
+let mockConsole = new (class MockConsole {
+  log(message) {
+    this.message = message;
+  }
+})();
 
 describe('MySingleton', () => {
   let instance = null;
 
   beforeEach(async () => {
     // Load module in a new world.
-    let { MySingleton } = await createWorld('./index.js');
+    let { MySingleton } = await createWorld('./index.js', { globals: { console: mockConsole } });
 
     instance = new MySingleton();
   });
@@ -41,12 +49,16 @@ describe('MySingleton', () => {
   describe('#sayFoo()', () => {
     it('should say foo', () => {
       instance.sayFoo();
+
+      assert.equal(mockConsole.message, 'Foo!');
     });
   });
 
   describe('#sayBar()', () => {
     it('should say bar', () => {
       instance.sayBar();
+
+      assert.equal(mockConsole.message, 'Bar!');
     });
   });
 });
