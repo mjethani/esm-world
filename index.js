@@ -25,7 +25,7 @@ let cacheMap = new WeakMap();
 
 async function packageLinker(specifier, { context }) {
   // Return a module object from cache if available.
-  let cache = cacheMap.get(context);
+  let { cache } = cacheMap.get(context);
   let module = cache.get(specifier);
 
   if (typeof module !== 'undefined')
@@ -59,7 +59,7 @@ async function fileLinker(specifier, { identifier, context }) {
   // If we already have the module object in the cache, return it. This is not
   // merely an optimization: modules are expected to work this way. Within a
   // "world," there is only one instance of a module.
-  let cache = cacheMap.get(context);
+  let { cache } = cacheMap.get(context);
   let module = cache.get(url);
 
   if (typeof module !== 'undefined')
@@ -121,7 +121,7 @@ export async function createWorld(path, { globals = {} } = {}) {
   let context = createContext(globals);
 
   // Each context has a map of module identifiers to module objects.
-  cacheMap.set(context, new Map());
+  cacheMap.set(context, { cache: new Map() });
 
   // Since we know we are loading a file, call the file linker with the URL as
   // the identifier of the referencing module.
