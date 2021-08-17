@@ -15,7 +15,9 @@
  */
 
 import { readFile } from 'fs/promises';
-import { dirname, resolve as resolvePath } from 'path';
+import { dirname,
+         isAbsolute as isAbsolutePath,
+         resolve as resolvePath } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { SourceTextModule, SyntheticModule, createContext } from 'vm';
 
@@ -91,10 +93,15 @@ async function linker(specifier, { identifier, context }) {
 
   // If the specifier is a relative path, pass it to the file linker;
   // otherwise, pass it to the package linker.
-  if (!specifier.startsWith('./') && !specifier.startsWith('../'))
-    return packageLinker(specifier, { context });
+  if (specifier.startsWith('./') || specifier.startsWith('../'))
+    return fileLinker(specifier, { identifier, context });
 
-  return fileLinker(specifier, { identifier, context });
+  // For consistency with the entry point, throw an error if the specifier is
+  // an absolute path.
+  if (isAbsolutePath(specifier))
+    throw new Error('Absolute paths are not supported');
+
+  return packageLinker(specifier, { context });
 }
 
 export async function createWorld(path, { globals = {} } = {}) {
