@@ -84,6 +84,11 @@ async function fileLinker(specifier, { identifier, context }) {
 }
 
 async function linker(specifier, { identifier, context }) {
+  // It's possible for a program to use a file URL in an import statement. It's
+  // best not to support this. It would interfere with our caches.
+  if (specifier.startsWith('file://'))
+    throw new Error('File URLs are not supported');
+
   // If the specifier is a relative path, pass it to the file linker;
   // otherwise, pass it to the package linker.
   if (!specifier.startsWith('./') && !specifier.startsWith('../'))
