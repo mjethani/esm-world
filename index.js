@@ -29,16 +29,8 @@ async function builtinLinker(specifier, { context }) {
 }
 
 async function fileLinker(specifier, { identifier, context }) {
-  let error = null;
-
-  try {
-    if (new URL(specifier).protocol !== 'file:')
-      error = new Error('Only file URLs are supported');
-  } catch (error) {
-  }
-
-  if (error !== null)
-    throw error;
+  if (!specifier.startsWith('./') && !specifier.startsWith('../'))
+    throw new Error('Only relative paths are supported');
 
   let path = resolvePath(dirname(fileURLToPath(identifier)), specifier);
   let url = pathToFileURL(path).toString();
@@ -72,6 +64,9 @@ async function linker(specifier, { identifier, context }) {
 }
 
 export async function createWorld(path, { globals = {} } = {}) {
+  if (!path.startsWith('./') && !path.startsWith('../'))
+    throw new Error('Only relative paths are supported');
+
   if (!('global' in globals))
     globals.global = globals;
 
