@@ -1,26 +1,57 @@
 This is an ES module loader for BDD-style testing.
 
 ```js
+/* index.js */
+
+let instance = null;
+
+export class MySingleton {
+  constructor() {
+    if (instance !== null)
+      throw new Error('Only a single instance is supported');
+
+    instance = this;
+  }
+
+  sayFoo() {
+    console.log('Foo!');
+  }
+
+  sayBar() {
+    console.log('Bar!');
+  }
+}
+```
+
+```js
 /* test.js */
 
 import { createWorld } from 'esm-world';
 
-let myModule = null;
+describe('MySingleton', () => {
+  let instance = null;
 
-beforeEach(async () => {
-  // Load module in a new world.
-  myModule = await createWorld('./index.js');
-});
+  beforeEach(async () => {
+    // Load module in a new world.
+    let { MySingleton } = await createWorld('./index.js');
 
-it('should foo', () => {
-  myModule.foo();
-});
+    instance = new MySingleton();
+  });
 
-it('should bar', () => {
-  myModule.bar();
+  describe('#sayFoo()', () => {
+    it('should say foo', () => {
+      instance.sayFoo();
+    });
+  });
+
+  describe('#sayBar()', () => {
+    it('should say bar', () => {
+      instance.sayBar();
+    });
+  });
 });
 ```
 
-It needs the `--experimental-vm-modules` option to Node.js and is meant for testing with the Mocha framework only for now.
+It needs the `--experimental-vm-modules` option to Node.js and is meant for testing with the [Mocha](https://mochajs.org/) framework only for now.
 
 Under development.
