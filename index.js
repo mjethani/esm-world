@@ -21,11 +21,11 @@ import { dirname,
 import { fileURLToPath, pathToFileURL } from 'url';
 import { SourceTextModule, SyntheticModule, createContext } from 'vm';
 
-let cacheMap = new WeakMap();
+let lookup = new WeakMap();
 
 async function packageLinker(specifier, { context }) {
   // Return a module object from cache if available.
-  let { cache } = cacheMap.get(context);
+  let { cache, hooks } = lookup.get(context);
   let module = cache.get(specifier);
 
   if (typeof module !== 'undefined')
@@ -33,8 +33,14 @@ async function packageLinker(specifier, { context }) {
 
   // Dynamically import the module, turn it into a synthetic module object, and
   // save the object to cache.
-  let object = await import(specifier);
-  let keys = Object.keys(object);
+  let object = await (specifier in hooks ?
+                        hooks[specifier](specifier) :
+                        import(specifier));
+
+  // Import hooks can return non-object values.
+  let keys = object !== null && typeof object === 'object' ?
+               Object.keys(object) :
+               [];
 
   let evaluateCallback = function () {
     for (let key of keys)
@@ -59,7 +65,7 @@ async function fileLinker(specifier, { identifier, context }) {
   // If we already have the module object in the cache, return it. This is not
   // merely an optimization: modules are expected to work this way. Within a
   // "world," there is only one instance of a module.
-  let { cache } = cacheMap.get(context);
+  let { cache } = lookup.get(context);
   let module = cache.get(url);
 
   if (typeof module !== 'undefined')
@@ -104,7 +110,8 @@ async function linker(specifier, { identifier, context }) {
   return packageLinker(specifier, { context });
 }
 
-export async function createWorld(path, { globals = {} } = {}) {
+export async function createWorld(path, { globals = {},
+                                          importHooks = {} } = {}) {
   // The entry point must be a relative path.
   if (!path.startsWith('./') && !path.startsWith('../'))
     throw new Error('Only relative paths are supported');
@@ -120,8 +127,9 @@ export async function createWorld(path, { globals = {} } = {}) {
   // Create a new VM context.
   let context = createContext(globals);
 
-  // Each context has a map of module identifiers to module objects.
-  cacheMap.set(context, { cache: new Map() });
+  // Each context has a map of module identifiers to module objects and zero or
+  // more import hooks.
+  lookup.set(context, { cache: new Map(), hooks: importHooks });
 
   // Since we know we are loading a file, call the file linker with the URL as
   // the identifier of the referencing module.
