@@ -23,15 +23,6 @@ import { SourceTextModule, SyntheticModule, createContext } from 'vm';
 
 let lookup = new WeakMap();
 
-function waitOneSecond() {
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve();
-    },
-    1000);
-  });
-}
-
 function packageLinker(specifier, { context }) {
   // Return a module object from cache if available.
   let { cache, hooks } = lookup.get(context);
@@ -60,6 +51,9 @@ function packageLinker(specifier, { context }) {
 
       module = new SyntheticModule(keys, evaluateCallback,
                                    { identifier: specifier, context });
+      await module.link(linker);
+      await module.evaluate();
+
       cache.set(specifier, module);
 
       resolve(module);
@@ -108,7 +102,10 @@ function fileLinker(specifier, { identifier, context }) {
                                     { identifier: url,
                                       context,
                                       initializeImportMeta,
-                                      importModuleDynamically: dynamicLinker });
+                                      importModuleDynamically: linker });
+      await module.link(linker);
+      await module.evaluate();
+
       cache.set(url, module);
 
       resolve(module);
@@ -123,25 +120,7 @@ function fileLinker(specifier, { identifier, context }) {
   return modulePromise;
 }
 
-async function dynamicLinker(specifier, { identifier, context }) {
-  let module = await linker(specifier, { identifier, context });
-
-  // A freshly loaded module is not linked.
-  if (module.status === 'unlinked') {
-    await module.link(linker);
-    await module.evaluate();
-
-  } else {
-    // There's no way to know when linking is done other than to keep checking
-    // at regular intervals.
-    while (module.status === 'linking')
-      await waitOneSecond();
-  }
-
-  return module;
-}
-
-async function linker(specifier, { identifier, context }) {
+function linker(specifier, { identifier, context }) {
   // It's possible for a program to use a file URL in an import statement. It's
   // best not to support this. It would interfere with our caches.
   if (specifier.startsWith('file://'))
@@ -184,13 +163,6 @@ export async function createWorld(path, { globals = {},
   // Since we know we are loading a file, call the file linker with the URL as
   // the identifier of the referencing module.
   let module = await fileLinker(path, { identifier: url, context });
-
-  // Link and evaluate recursively.
-  //
-  // Note: This API is experimental.
-  // https://nodejs.org/api/vm.html#vm_class_vm_module
-  await module.link(linker);
-  await module.evaluate();
 
   // Return the module namespace, which should contain all of the module's
   // exports.
