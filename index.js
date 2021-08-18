@@ -85,8 +85,21 @@ async function fileLinker(specifier, { identifier, context }) {
   module = new SourceTextModule(source,
                                 { identifier: url,
                                   context,
-                                  initializeImportMeta });
+                                  initializeImportMeta,
+                                  importModuleDynamically: dynamicLinker });
   cache.set(url, module);
+
+  return module;
+}
+
+async function dynamicLinker(specifier, { identifier, context }) {
+  let module = await linker(specifier, { identifier, context });
+
+  // A freshly loaded module is not linked.
+  if (module.status === 'unlinked') {
+    await module.link(linker);
+    await module.evaluate();
+  }
 
   return module;
 }
