@@ -1,6 +1,6 @@
 {
   "name": "esm-world",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "An ES module loader for BDD-style testing",
   "main": "index.js",
   "type": "module",
