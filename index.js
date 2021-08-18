@@ -23,7 +23,16 @@ import { SourceTextModule, SyntheticModule, createContext } from 'vm';
 
 let lookup = new WeakMap();
 
-async function packageLinker(specifier, { context }) {
+function waitOneSecond() {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve();
+    },
+    1000);
+  });
+}
+
+function packageLinker(specifier, { context }) {
   // Return a module object from cache if available.
   let { cache, hooks } = lookup.get(context);
   let module = cache.get(specifier);
@@ -31,30 +40,41 @@ async function packageLinker(specifier, { context }) {
   if (typeof module !== 'undefined')
     return module;
 
-  // Dynamically import the module, turn it into a synthetic module object, and
-  // save the object to cache.
-  let object = await (specifier in hooks ?
-                        hooks[specifier](specifier) :
-                        import(specifier));
+  let modulePromise = new Promise(async (resolve, reject) => {
+    try {
+      // Dynamically import the module, turn it into a synthetic module object,
+      // and save the object to cache.
+      let object = await (specifier in hooks ?
+                            hooks[specifier](specifier) :
+                            import(specifier));
 
-  // Import hooks can return non-object values.
-  let keys = object !== null && typeof object === 'object' ?
-               Object.keys(object) :
-               [];
+      // Import hooks can return non-object values.
+      let keys = object !== null && typeof object === 'object' ?
+                   Object.keys(object) :
+                   [];
 
-  let evaluateCallback = function () {
-    for (let key of keys)
-      this.setExport(key, object[key]);
-  };
+      let evaluateCallback = function () {
+        for (let key of keys)
+          this.setExport(key, object[key]);
+      };
 
-  module = new SyntheticModule(keys, evaluateCallback,
-                               { identifier: specifier, context });
-  cache.set(specifier, module);
+      module = new SyntheticModule(keys, evaluateCallback,
+                                   { identifier: specifier, context });
+      cache.set(specifier, module);
 
-  return module;
+      resolve(module);
+
+    } catch (error) {
+      reject(error);
+    }
+  });
+
+  cache.set(specifier, modulePromise);
+
+  return modulePromise;
 }
 
-async function fileLinker(specifier, { identifier, context }) {
+function fileLinker(specifier, { identifier, context }) {
   // The specifier is a path relative to the identifier of the referencing
   // module, which is a file URL. e.g. './src/utils.js' relative to
   // 'file:///Users/joe/Code/new-widget/index.js' gives us
@@ -71,25 +91,36 @@ async function fileLinker(specifier, { identifier, context }) {
   if (typeof module !== 'undefined')
     return module;
 
-  // Load the code.
-  let source = await readFile(path, 'utf8');
+  let modulePromise = new Promise(async (resolve, reject) => {
+    try {
+      // Load the code.
+      let source = await readFile(path, 'utf8');
 
-  // Set up the import.meta object.
-  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import.meta
-  let initializeImportMeta = (meta, { identifier }) => {
-    meta.url = identifier;
-  };
+      // Set up the import.meta object.
+      // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import.meta
+      let initializeImportMeta = (meta, { identifier }) => {
+        meta.url = identifier;
+      };
 
-  // Use the resolved URL above as the module identifier and save the module
-  // object to cache.
-  module = new SourceTextModule(source,
-                                { identifier: url,
-                                  context,
-                                  initializeImportMeta,
-                                  importModuleDynamically: dynamicLinker });
-  cache.set(url, module);
+      // Use the resolved URL above as the module identifier and save the module
+      // object to cache.
+      module = new SourceTextModule(source,
+                                    { identifier: url,
+                                      context,
+                                      initializeImportMeta,
+                                      importModuleDynamically: dynamicLinker });
+      cache.set(url, module);
 
-  return module;
+      resolve(module);
+
+    } catch (error) {
+      reject(error);
+    }
+  });
+
+  cache.set(url, modulePromise);
+
+  return modulePromise;
 }
 
 async function dynamicLinker(specifier, { identifier, context }) {
@@ -99,6 +130,12 @@ async function dynamicLinker(specifier, { identifier, context }) {
   if (module.status === 'unlinked') {
     await module.link(linker);
     await module.evaluate();
+
+  } else {
+    // There's no way to know when linking is done other than to keep checking
+    // at regular intervals.
+    while (module.status === 'linking')
+      await waitOneSecond();
   }
 
   return module;
